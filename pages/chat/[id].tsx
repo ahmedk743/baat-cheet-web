@@ -1,21 +1,33 @@
-import { doc, getDoc } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  orderBy,
+  query,
+} from "firebase/firestore";
 import Head from "next/head";
 import React from "react";
+import { useAuthState } from "react-firebase-hooks/auth";
 import styled from "styled-components";
 import ChatScreen from "../../components/ChatScreen";
+import Loader from "../../components/Loader";
 import Sidebar from "../../components/Sidebar";
-import { db } from "../../firebase";
+import { auth, db } from "../../firebase";
+import { getRecepientEmail } from "../../utils/getRecepientEmail";
 
-function Chat() {
+function Chat({ chat, messages }: any) {
+  const [user, loading]: any = useAuthState(auth);
+
   return (
     <Container>
       <Head>
-        <title>Chat</title>
+        <title>Chat with {getRecepientEmail(chat.users, user)}</title>
       </Head>
       <Sidebar />
 
       <ChatContainer>
-        <ChatScreen />
+        <ChatScreen chat={chat} messages={messages} />
       </ChatContainer>
     </Container>
   );
@@ -23,13 +35,39 @@ function Chat() {
 
 export default Chat;
 
-// export async function getServerSideProps(context: any) {
-//   const ref = doc(db, "chats", context.query.id);
+export async function getServerSideProps(context: any) {
+  const docRef = doc(db, "chats", context.query.id);
 
-//   // PREP the messages on the server
-//   const messagesCollection = collection("messages").orderBy("timestamp", "asc").get();
-//   const messagesRes = await collection("messages").orderBy("timestamp", "asc").get();
-// }
+  // PREP the messages on the server
+  const q = query(collection(docRef, "messages"), orderBy("timestamp", "asc"));
+  const docSnap = await getDocs(q);
+
+  const messages = docSnap.docs
+    .map((doc: any) => ({
+      id: doc.id,
+      ...doc.data(),
+    }))
+    .map((messages: any) => ({
+      ...messages,
+      timestamp: messages.timestamp.toDate().getTime(),
+    }));
+
+  // PREP the chats
+  const chatRes = await getDoc(docRef);
+  const chat = {
+    id: chatRes.id,
+    ...chatRes.data(),
+  };
+
+  console.log(chat, messages);
+
+  return {
+    props: {
+      messages: JSON.stringify(messages),
+      chat: chat,
+    },
+  };
+}
 
 const Container = styled.div`
   display: flex;
